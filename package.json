@@ -1,5 +1,5 @@
 {
-  "name": "hyperion-challenge",
+  "name": "crypto-scanner",
   "version": "1.0.0",
   "description": "Coding challenge micro‑service for classifying crypto assets as trending or ranging.",
   "private": true,
@@ -11,7 +11,7 @@
     "dev": "tsx src/server.ts",
     "lint": "eslint 'src/**/*.{ts,tsx}' --max-warnings 0",
     "test": "jest",
-    "mcp:test": "echo 'Test MCP endpoints:' && echo 'Tools list:' && curl -s -X POST http://localhost:8787/mcp -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}' | jq && echo 'Tool call:' && curl -s -X POST http://localhost:8787/mcp -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"crypto_scanner_1h_regime\",\"arguments\":{\"symbol\":\"BTC\"}}}' | jq"
+    "mcp:test": "echo 'Test MCP endpoints:' && echo 'Initialize:' && SESSIONID=$(curl -s -X POST http://localhost:8787/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{\"roots\":{\"listChanged\":false},\"sampling\":{}},\"clientInfo\":{\"name\":\"test-client\",\"version\":\"1.0.0\"}}}' | grep 'Session initialized' | cut -d' ' -f5 || echo 'session-id') && echo 'Tools list:' && curl -s -X POST http://localhost:8787/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -H 'mcp-session-id: session-id' -d '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}' | tail -1 | jq && echo 'Tool call:' && curl -s -X POST http://localhost:8787/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -H 'mcp-session-id: session-id' -d '{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"crypto_scanner_1h_regime\",\"input\":{\"symbol\":\"BTC\"}}}' | tail -1 | jq"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.23",

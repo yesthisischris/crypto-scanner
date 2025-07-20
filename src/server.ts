@@ -21,7 +21,7 @@ if (!process.env.OPENAI_API_KEY) {
 }
 
 // Create MCP server with proper SDK
-const createMcpServer = () => {
+const getServer = () => {
   const server = new McpServer({
     name: 'simple-trader',
     version: '1.0.0'
@@ -38,8 +38,9 @@ const createMcpServer = () => {
     inputSchema: {
       symbol: z.string().describe('Crypto symbol (e.g., BTC, ETH)')
     }
-  }, async ({ symbol }) => {
-    return await toolHandler({ symbol })
+  }, async (args: { symbol: string }) => {
+    console.log('Tool called with args:', args)
+    return await toolHandler({ symbol: args.symbol })
   })
 
   return server
@@ -72,8 +73,17 @@ const mcpPostHandler = async (req: express.Request, res: express.Response) => {
         }
       })
       
+      // Set up onclose handler to clean up transport when closed
+      transport.onclose = () => {
+        const sid = transport.sessionId
+        if (sid && transports[sid]) {
+          console.log(`Transport closed for session ${sid}, removing from transports map`)
+          delete transports[sid]
+        }
+      }
+      
       // Connect the MCP server to the transport
-      const server = createMcpServer()
+      const server = getServer()
       await server.connect(transport)
     } else {
       res.status(400).json({
@@ -84,7 +94,7 @@ const mcpPostHandler = async (req: express.Request, res: express.Response) => {
       return
     }
     
-    await transport.handleRequest(req, res)
+    await transport.handleRequest(req, res, req.body)
   } catch (error) {
     console.error('MCP handler error:', error)
     if (!res.headersSent) {
