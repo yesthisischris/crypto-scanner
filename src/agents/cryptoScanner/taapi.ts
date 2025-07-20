@@ -1,8 +1,13 @@
 import axios from "axios";
 
+export interface TAData {
+  ema20: number;
+  adx: number;
+}
+
 const base = "https://api.taapi.io";
 
-export async function fetchTA(symbol: string) {
+export async function fetchTA(symbol: string): Promise<TAData> {
   const [ema20, adx] = await Promise.all([
     axios
       .get(`${base}/ema`, {

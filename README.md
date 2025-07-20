@@ -77,3 +77,11 @@ The confidence score scales with ADX and is capped at 1.0.
 ## License
 
 This project is released under the MIT license.
+
+## Docker
+
+Build a container and run it:
+
+```bash
+docker build -t trader . && docker run --env-file .env -p8787:8787 trader
+```
