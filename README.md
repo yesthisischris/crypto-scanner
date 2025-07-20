@@ -1,4 +1,4 @@
-# Hyperion Coding Challenge – Crypto Scanner
+# Coding Challenge – Crypto Scanner
 
 This repository implements a minimal micro‑service that classifies a crypto asset as **trending** or **ranging** using simple technical indicators.  The service is designed to be compatible with the Model‑Context‑Protocol (MCP) so it can be orchestrated by other agentic systems.
 
@@ -67,16 +67,6 @@ The classification is intentionally simple to meet the requirements of the codin
   - Otherwise
 
 The confidence score scales with ADX and is capped at 1.0.
-
-## Caveats
-
-- The free tier of TAAPI is rate‑limited and certain indicators (e.g. ADX) may require a paid plan to access reliably.  You should add retry and caching logic in a production implementation.
-- CoinMarketCap’s free API returns only the latest quote; this example does not use historical OHLC data.
-- This project is intentionally minimal.  It does not include linting or test tooling, though you can easily add ESLint and Jest if desired.
-
-## License
-
-This project is released under the MIT license.
 
 ## Docker
 
