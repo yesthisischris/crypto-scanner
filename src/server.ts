@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { serve } from "vercel-ai/sdk";
+import { serve } from "ai/server";
 import { cryptoScannerTool } from "./agents/cryptoScanner";
 
 if (!process.env.TAAPI_KEY || !process.env.CMC_KEY) {

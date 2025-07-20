@@ -12,5 +12,7 @@
   "parserOptions": {
     "sourceType": "module"
   },
-  "rules": {}
+  "rules": {
+    "@typescript-eslint/strict-boolean-expressions": "off"
+  }
 }
