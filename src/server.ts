@@ -1,6 +1,11 @@
 import 'dotenv/config';
 import express from 'express'
-import { ToolName, ToolConfig, toolHandler } from './scanner'
+import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
+import { ToolName, ToolConfig, toolHandler } from './scanner/index.js'
 
 // ---------------------------------------------------------------------------
 // Guard-rails: make sure API keys exist at startup.
@@ -15,76 +20,93 @@ if (!process.env.OPENAI_API_KEY) {
   console.warn('OPENAI_API_KEY missing; LLM classification will fail')
 }
 
-// 1. Create simple MCP-style tool registry
-const mcpTools = [{
-  name: ToolName,
-  description: ToolConfig.description,
-  inputSchema: {
-    type: 'object',
-    properties: {
-      symbol: {
-        type: 'string',
-        description: 'Crypto symbol (e.g., BTC, ETH)'
-      }
-    },
-    required: ['symbol']
-  }
-}]
+// Create MCP server with proper SDK
+const createMcpServer = () => {
+  const server = new McpServer({
+    name: 'simple-trader',
+    version: '1.0.0'
+  }, { 
+    capabilities: { 
+      tools: {} 
+    } 
+  })
 
-// 2. MCP-style tool call handler
-async function callMcpTool(name: string, args: Record<string, unknown>) {
-  if (name === ToolName) {
-    return await toolHandler(args as { symbol: string })
-  } else {
-    throw new Error(`Unknown tool: ${name}`)
-  }
+  // Register the crypto scanner tool using MCP SDK
+  server.registerTool(ToolName, {
+    title: 'Crypto Scanner 1H Regime',
+    description: ToolConfig.description,
+    inputSchema: {
+      symbol: z.string().describe('Crypto symbol (e.g., BTC, ETH)')
+    }
+  }, async ({ symbol }) => {
+    return await toolHandler({ symbol })
+  })
+
+  return server
 }
 
-// 2. Wire it to an HTTP transport (stateless mode for simplicity)
+// Map to store transports by session ID
+const transports: Record<string, StreamableHTTPServerTransport> = {}
+
+// Wire it to an HTTP transport using MCP SDK
 const app = express()
 app.use(express.json())
 
-app.post('/mcp', async (req, res) => {
+// MCP POST endpoint using SDK transport
+const mcpPostHandler = async (req: express.Request, res: express.Response) => {
+  const sessionId = req.headers['mcp-session-id'] as string
+  
   try {
-    const { method, params, id } = req.body
+    let transport: StreamableHTTPServerTransport
     
-    if (method === 'tools/list') {
-      res.json({
-        jsonrpc: '2.0',
-        id,
-        result: { tools: mcpTools }
+    if (sessionId && transports[sessionId]) {
+      // Reuse existing transport
+      transport = transports[sessionId]
+    } else if (!sessionId && isInitializeRequest(req.body)) {
+      // New initialization request
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (sessionId: string) => {
+          console.log(`Session initialized with ID: ${sessionId}`)
+          transports[sessionId] = transport
+        }
       })
-    } else if (method === 'tools/call') {
-      const { name, arguments: args } = params
-      const result = await callMcpTool(name, args)
-      res.json({
-        jsonrpc: '2.0',
-        id,
-        result
-      })
+      
+      // Connect the MCP server to the transport
+      const server = createMcpServer()
+      await server.connect(transport)
     } else {
       res.status(400).json({
         jsonrpc: '2.0',
-        id,
-        error: { code: -32601, message: 'Method not found' }
+        id: req.body.id,
+        error: { code: -32600, message: 'Invalid request: missing session ID or not an initialize request' }
+      })
+      return
+    }
+    
+    await transport.handleRequest(req, res)
+  } catch (error) {
+    console.error('MCP handler error:', error)
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: '2.0',
+        id: req.body.id,
+        error: { code: -32603, message: error instanceof Error ? error.message : 'Unknown error' }
       })
     }
-  } catch (error) {
-    res.status(500).json({
-      jsonrpc: '2.0',
-      id: req.body.id,
-      error: { code: -32603, message: error instanceof Error ? error.message : 'Unknown error' }
-    })
   }
-})
+}
+
+app.post('/mcp', mcpPostHandler)
 
 // /scan endpoint for simple cURL tests
 app.post('/scan', async (req, res) => {
   try {
     const result = await toolHandler(req.body)
-    // Extract the JSON content from MCP format
-    if (result.content && result.content[0] && result.content[0].type === 'json') {
-      res.json(result.content[0].json)
+    // Extract the JSON content from text format
+    if (result.content && result.content[0] && result.content[0].type === 'text') {
+      const jsonContent = JSON.parse(result.content[0].text)
+      res.json(jsonContent)
     } else {
       res.json(result)
     }

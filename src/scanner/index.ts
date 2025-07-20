@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { classify } from './classify'
+import { classify } from './classify.js'
 
 export const ToolName = 'crypto_scanner_1h_regime'
 
@@ -23,6 +23,9 @@ export const ToolConfig = {
 export async function toolHandler({ symbol }: { symbol: string }) {
   const result = await classify(symbol)
   return {
-    content: [{ type: 'json', json: result }]
+    content: [{ 
+      type: 'text' as const, 
+      text: JSON.stringify(result, null, 2) 
+    }]
   }
 }

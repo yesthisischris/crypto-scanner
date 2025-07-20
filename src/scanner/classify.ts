@@ -1,6 +1,6 @@
-import { fetchTA, TAData } from "./taapi";
+import { fetchTA, TAData } from "./taapi.js";
 import axios from "axios";
-import { classifyWithLLM } from "../llm/classifyWithLLM";
+import { classifyWithLLM } from "../llm/classifyWithLLM.js";
 
 async function lastClose(symbol: string) {
   const res = await axios.get(
