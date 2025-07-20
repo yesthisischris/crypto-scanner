@@ -6,7 +6,11 @@ import { ToolName, ToolConfig, toolHandler } from './agents/cryptoScanner'
 // ---------------------------------------------------------------------------
 // Guard-rails: make sure API keys exist at startup.
 // ---------------------------------------------------------------------------
-if (!process.env.TAAPI_KEY || !process.env.CMC_KEY) {
+if (!process.env.TAAPI_KEY) {
+  console.warn('TAAPI_KEY missing; expect 429s')
+} else if (!process.env.CMC_KEY) {
+  console.warn('CMC_KEY missing; price fetch will fail')
+} else if (!process.env.TAAPI_KEY || !process.env.CMC_KEY) {
   throw new Error(
     'Environment variables TAAPI_KEY and CMC_KEY must be set before starting the server.'
   );
@@ -52,6 +56,23 @@ app.post('/mcp', async (req, res) => {
       jsonrpc: '2.0',
       id: req.body.id,
       error: { code: -32603, message: error instanceof Error ? error.message : 'Unknown error' }
+    })
+  }
+})
+
+// /scan endpoint for simple cURL tests
+app.post('/scan', async (req, res) => {
+  try {
+    const result = await toolHandler(req.body)
+    // Extract the JSON content from MCP format
+    if (result.content && result.content[0] && result.content[0].type === 'json') {
+      res.json(result.content[0].json)
+    } else {
+      res.json(result)
+    }
+  } catch (error) {
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Unknown error' 
     })
   }
 })

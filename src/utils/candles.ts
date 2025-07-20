@@ -5,9 +5,9 @@ export async function lastClose(symbol: string) {
     "https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest",
     {
       headers: { "X-CMC_PRO_API_KEY": process.env.CMC_KEY || "" },
-      params: { symbol }
+      params: { symbol },
+      timeout: 5000
     }
   );
-  // CMC returns nested JSON; extract last price
   return res.data.data[symbol][0].quote.USD.price as number;
 }
