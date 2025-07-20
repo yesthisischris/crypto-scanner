@@ -1,0 +1,22 @@
+{
+  "name": "hyperion-challenge",
+  "version": "1.0.0",
+  "description": "Coding challenge micro‑service for classifying crypto assets as trending or ranging.",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node src/server.ts",
+    "lint": "eslint 'src/**/*.{ts,tsx}' --fix"
+  },
+  "dependencies": {
+    "axios": "^1.6.1",
+    "dotenv": "^16.3.1",
+    "model-context-protocol": "^0.7.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.4",
+    "ts-node": "^10.9.2"
+  }
+}
