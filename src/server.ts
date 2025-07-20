@@ -15,8 +15,6 @@ if (!process.env.TAAPI_KEY || !process.env.CMC_KEY) {
 // 1. Build the MCP server
 const server = new McpServer({ name: 'crypto-scanner', version: '0.1.0' })
 
-server.registerTool(ToolName, ToolConfig, toolHandler)
-
 // 2. Wire it to an HTTP transport (stateless mode for simplicity)
 const app = express()
 app.use(express.json())
