@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import express from 'express';
-
-import { cryptoScannerTool } from './agents/cryptoScanner/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import express from 'express'
+import { ToolName, ToolConfig, toolHandler } from './agents/cryptoScanner'
 
 // ---------------------------------------------------------------------------
 // Guard-rails: make sure API keys exist at startup.
@@ -12,21 +12,59 @@ if (!process.env.TAAPI_KEY || !process.env.CMC_KEY) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Express bootstrap
-// ---------------------------------------------------------------------------
-const app = express();
+// 1. Build the MCP server
+const server = new McpServer({ name: 'crypto-scanner', version: '0.1.0' })
 
-// Express parses JSON bodies by default from v4.19 when content-type is
-// application/json. If you use an older minor, keep explicit middleware:
-app.use(express.json());
+server.registerTool(ToolName, ToolConfig, toolHandler)
 
-// `cryptoScannerTool.httpHandler()` in MCP SDK returns an Express-style
-// `(req,res,next)` function, so we can mount it directly.
-app.use('/scan', cryptoScannerTool.httpHandler());
+// 2. Wire it to an HTTP transport (stateless mode for simplicity)
+const app = express()
+app.use(express.json())
+
+app.post('/mcp', async (req, res) => {
+  try {
+    const { method, params } = req.body
+    
+    if (method === 'call_tool') {
+      const { name, arguments: args } = params
+      
+      if (name === ToolName) {
+        const result = await toolHandler(args)
+        res.json({
+          jsonrpc: '2.0',
+          id: req.body.id,
+          result
+        })
+      } else {
+        res.status(400).json({
+          jsonrpc: '2.0',
+          id: req.body.id,
+          error: { code: -32601, message: 'Method not found' }
+        })
+      }
+    } else {
+      res.status(400).json({
+        jsonrpc: '2.0',
+        id: req.body.id,
+        error: { code: -32601, message: 'Method not found' }
+      })
+    }
+  } catch (error) {
+    res.status(500).json({
+      jsonrpc: '2.0',
+      id: req.body.id,
+      error: { code: -32603, message: error instanceof Error ? error.message : 'Unknown error' }
+    })
+  }
+})
+
+// Simple health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
 
 const PORT = Number(process.env.PORT) || 8787;
 
-app.listen(PORT, () => {
-  console.log(`🚀 simple-trader server running at http://localhost:${PORT}/scan`);
-});
+app.listen(PORT, () =>
+  console.log(`MCP HTTP server listening on :${PORT}/mcp`)
+)
