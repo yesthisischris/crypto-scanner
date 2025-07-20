@@ -1,0 +1,11 @@
+services:
+  simple-trader:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      - TAAPI_KEY=${TAAPI_KEY}
+      - CMC_KEY=${CMC_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - .env:/app/.env:ro

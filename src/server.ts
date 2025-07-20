@@ -1,23 +1,44 @@
 import 'dotenv/config';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import express from 'express'
-import { ToolName, ToolConfig, toolHandler } from './agents/cryptoScanner'
+import { ToolName, ToolConfig, toolHandler } from './scanner'
 
 // ---------------------------------------------------------------------------
 // Guard-rails: make sure API keys exist at startup.
 // ---------------------------------------------------------------------------
 if (!process.env.TAAPI_KEY) {
   console.warn('TAAPI_KEY missing; expect 429s')
-} else if (!process.env.CMC_KEY) {
+}
+if (!process.env.CMC_KEY) {
   console.warn('CMC_KEY missing; price fetch will fail')
-} else if (!process.env.TAAPI_KEY || !process.env.CMC_KEY) {
-  throw new Error(
-    'Environment variables TAAPI_KEY and CMC_KEY must be set before starting the server.'
-  );
+}
+if (!process.env.OPENAI_API_KEY) {
+  console.warn('OPENAI_API_KEY missing; LLM classification will fail')
 }
 
-// 1. Build the MCP server
-const server = new McpServer({ name: 'crypto-scanner', version: '0.1.0' })
+// 1. Create simple MCP-style tool registry
+const mcpTools = [{
+  name: ToolName,
+  description: ToolConfig.description,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      symbol: {
+        type: 'string',
+        description: 'Crypto symbol (e.g., BTC, ETH)'
+      }
+    },
+    required: ['symbol']
+  }
+}]
+
+// 2. MCP-style tool call handler
+async function callMcpTool(name: string, args: Record<string, unknown>) {
+  if (name === ToolName) {
+    return await toolHandler(args as { symbol: string })
+  } else {
+    throw new Error(`Unknown tool: ${name}`)
+  }
+}
 
 // 2. Wire it to an HTTP transport (stateless mode for simplicity)
 const app = express()
@@ -25,29 +46,26 @@ app.use(express.json())
 
 app.post('/mcp', async (req, res) => {
   try {
-    const { method, params } = req.body
+    const { method, params, id } = req.body
     
-    if (method === 'call_tool') {
+    if (method === 'tools/list') {
+      res.json({
+        jsonrpc: '2.0',
+        id,
+        result: { tools: mcpTools }
+      })
+    } else if (method === 'tools/call') {
       const { name, arguments: args } = params
-      
-      if (name === ToolName) {
-        const result = await toolHandler(args)
-        res.json({
-          jsonrpc: '2.0',
-          id: req.body.id,
-          result
-        })
-      } else {
-        res.status(400).json({
-          jsonrpc: '2.0',
-          id: req.body.id,
-          error: { code: -32601, message: 'Method not found' }
-        })
-      }
+      const result = await callMcpTool(name, args)
+      res.json({
+        jsonrpc: '2.0',
+        id,
+        result
+      })
     } else {
       res.status(400).json({
         jsonrpc: '2.0',
-        id: req.body.id,
+        id,
         error: { code: -32601, message: 'Method not found' }
       })
     }
@@ -85,5 +103,5 @@ app.get('/health', (req, res) => {
 const PORT = Number(process.env.PORT) || 8787;
 
 app.listen(PORT, () =>
-  console.log(`MCP HTTP server listening on :${PORT}/mcp`)
+  console.log(`MCP HTTP server listening on :${PORT}`)
 )

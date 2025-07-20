@@ -22,7 +22,6 @@ RUN corepack enable && pnpm install --prod --frozen-lockfile
 
 # Copy compiled JS + any assets
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/src/agents/cryptoScanner/schema.ts ./src/agents/cryptoScanner/  # keep schema for runtime checks
 
 # Ensure the container fails fast on unhandled rejections
 ENV NODE_OPTIONS=--unhandled-rejections=strict

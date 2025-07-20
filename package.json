@@ -10,25 +10,29 @@
     "start": "node dist/server.js",
     "dev": "tsx src/server.ts",
     "lint": "eslint 'src/**/*.{ts,tsx}' --max-warnings 0",
-    "test": "jest"
+    "test": "jest",
+    "mcp:test": "echo 'Test MCP endpoints:' && echo 'Tools list:' && curl -s -X POST http://localhost:8787/mcp -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}' | jq && echo 'Tool call:' && curl -s -X POST http://localhost:8787/mcp -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"crypto_scanner_1h_regime\",\"arguments\":{\"symbol\":\"BTC\"}}}' | jq"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^1.3.23",
     "@modelcontextprotocol/sdk": "^1.16.0",
+    "ai": "^4.3.19",
     "axios": "^1.7.0",
     "dotenv": "^17.1.0",
     "express": "^4.19.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@eslint/js": "^9.31.0",
     "@types/express": "^4.17.22",
+    "@types/jest": "^29.5.0",
     "@types/node": "^20.8.0",
-    "@typescript-eslint/eslint-plugin": "^7.2.0",
-    "@typescript-eslint/parser": "^7.2.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^9.31.0",
     "jest": "^29.7.0",
     "prettier": "^3.3.1",
     "ts-jest": "^29.1.1",
-    "ts-node": "^10.9.1",
     "tsx": "^4.20.3",
     "typescript": "^5.5.0"
   }
