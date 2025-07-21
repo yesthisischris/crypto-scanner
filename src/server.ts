@@ -1,88 +1,70 @@
+// src/server.ts --------------------------------------------------------------
 import 'dotenv/config';
 import express from 'express';
-import crypto from 'crypto';
-import { Server as McpServer } from '@modelcontextprotocol/sdk/server/index.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import {
-  ListToolsRequestSchema,
-  CallToolRequestSchema,
-  ListToolsResult,
-  CallToolResult,
-} from '@modelcontextprotocol/sdk/types.js';
-import { ToolName, ToolConfig, toolHandler } from './scanner/index.js';
+import { randomUUID } from 'node:crypto';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StreamableHTTPServerTransport }
+        from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { z } from 'zod';
+import { toolHandler } from './scanner/index.js';
 
-// ---------------------------------------------------------------------------
-// Guard-rails: make sure API keys exist at startup.
-// ---------------------------------------------------------------------------
-if (!process.env.TAAPI_KEY) {
-  process.stderr.write('TAAPI_KEY missing; expect 429s\n')
-}
-if (!process.env.CMC_KEY) {
-  process.stderr.write('CMC_KEY missing; price fetch will fail\n')
-}
-if (!process.env.OPENAI_API_KEY) {
-  process.stderr.write('OPENAI_API_KEY missing; LLM classification will fail\n')
-}
+/* ── 0. Basic env‑guardrails ─────────────────────────────────────────────── */
+['TAAPI_KEY', 'CMC_KEY', 'OPENAI_API_KEY'].forEach(key => {
+  if (!process.env[key]) process.stderr.write(`${key} missing – see README\n`);
+});
 
-const app = express();
-app.use(express.json());                     // <‑‑ 1. make req.body available
+/* ── 1. Create & configure the MCP server ────────────────────────────────── */
+const mcp = new McpServer({
+  name:  'crypto-scanner',
+  version: '1.1.0'
+});
 
-/** ----------------------------------------------------------------
- * 1 – MCP SERVER + TRANSPORT
- * -------------------------------------------------------------- */
-const mcpServer = new McpServer(
-  { name: 'crypto-scanner', version: '1.0.0' },
-  { capabilities: { tools: {}, resources: {} } },
+/* ----- Register the single tool ------------------------------------------ */
+mcp.registerTool(
+  'classify_asset',
+  {
+    title: 'Classify a crypto asset',
+    description: 'Return "trending" or "ranging" for the given symbol',
+    inputSchema: {
+      symbol: z.string().describe('Crypto symbol (e.g. BTC, ETH)')
+    }
+  },
+  async ({ symbol }) => toolHandler({ symbol }) 
 );
 
-// Register the two request types you need
-mcpServer.setRequestHandler(ListToolsRequestSchema, async (): Promise<ListToolsResult> => ({
-  tools: [
-    {
-      name: ToolName,
-      description: ToolConfig.description,
-      inputSchema: {
-        type: 'object',
-        properties: { symbol: { type: 'string', description: 'Crypto (BTC, ETH …)' } },
-        required: ['symbol'],
-      },
-    },
-  ],
-}));
-
-mcpServer.setRequestHandler(CallToolRequestSchema, async (req): Promise<CallToolResult> => {
-  const { name, arguments: args } = req.params;
-  if (name !== ToolName) throw new Error(`Unknown tool ${name}`);
-  if (!args?.symbol || typeof args.symbol !== 'string') throw new Error('symbol must be string');
-  return toolHandler({ symbol: args.symbol });
-});
-
+/* ── 2. HTTP transport with session management ───────────────────────────── */
 const transport = new StreamableHTTPServerTransport({
-  sessionIdGenerator: () => crypto.randomUUID(),
-  enableJsonResponse: true,                          // ← Return plain JSON instead of SSE framing
+  sessionIdGenerator: () => randomUUID(),
+  enableJsonResponse: true,
+  enableDnsRebindingProtection: true,
+  allowedHosts: [
+    'localhost',
+    'localhost:8787',
+    '127.0.0.1',
+    '127.0.0.1:8787'
+  ]
 });
 
-/** ----------------------------------------------------------------
- * 2 – ROUTES
- * -------------------------------------------------------------- */
-// POST – JSON‑RPC requests (initialize, tools/…)
-app.post('/mcp', async (req, res) => {
-  await transport.handleRequest(req, res, req.body);            // pass parsed body
+/* ── 3. Express wiring ----------------------------------------------------- */
+const app = express();
+app.use(express.json());
+app.post   ('/mcp', (req, res) => transport.handleRequest(req, res, req.body));
+app.get    ('/mcp', (req, res) => transport.handleRequest(req, res));
+app.delete ('/mcp', (req, res) => transport.handleRequest(req, res));
+
+/* >>> lightweight ping endpoint for Docker health‑check */
+app.get('/health', (_req, res) => res.sendStatus(204));
+
+/* ── 4. Bootstrap – keep top‑level‑await out of the emitted JS ------------- */
+(async () => {
+  await mcp.connect(transport);
+  const PORT = Number(process.env.PORT) || 8787;
+  app.listen(PORT, () =>
+    console.error(`MCP HTTP server ready at http://localhost:${PORT}/mcp`)
+  );
+})().catch(err => {
+  console.error('Fatal server start‑up error:', err);
+  process.exit(1);
 });
 
-// GET – SSE stream for server‑>client notifications
-app.get('/mcp', async (req, res) => {
-  await transport.handleRequest(req, res);
-});
-
-// DELETE – client explicitly ends the session
-app.delete('/mcp', async (req, res) => {
-  await transport.handleRequest(req, res);
-});
-
-// one‑time binding of server to transport
-await mcpServer.connect(transport);
-
-/** ---------------------------------------------------------------- */
-const PORT = Number(process.env.PORT) || 8787;
-app.listen(PORT, () => process.stderr.write(`MCP ready on http://localhost:${PORT}/mcp\n`));
+export {};            // keeps TypeScript in module mode

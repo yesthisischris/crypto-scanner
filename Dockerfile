@@ -16,6 +16,9 @@ FROM node:20-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # Install only prod deps
 COPY package.json pnpm-lock.yaml* ./
 RUN corepack enable && pnpm install --prod --no-frozen-lockfile
