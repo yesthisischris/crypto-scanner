@@ -49,15 +49,9 @@ This repository implements a minimal micro‑service that classifies a crypto as
    }
    ```
 
-## Endpoints
-
-| Route | Method | Body | Returns |
-|------|--------|------|---------|
-| `/scan` | POST | `{ "symbol": "BTC" }` | JSON with `regime`, `lastPrice`, `confidence` and raw indicator values |
-
 ## Classification Logic
 
-The classification is intentionally simple to meet the requirements of the coding challenge:
+The classification is as follows:
 
 - **Trending:**
   - Current close price > EMA20
@@ -68,10 +62,7 @@ The classification is intentionally simple to meet the requirements of the codin
 
 The confidence score scales with ADX and is capped at 1.0.
 
-## Docker
-
-Build a container and run it:
-
-```bash
-docker build -t trader . && docker run --env-file .env -p8787:8787 trader
+## Docker Compose Instructions
+```
+    docker compose up --build        # http://localhost:8787
 ```
