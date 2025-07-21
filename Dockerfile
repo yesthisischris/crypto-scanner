@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Copy only the files that affect dependency resolution first
 COPY package.json pnpm-lock.yaml* ./
-RUN corepack enable && pnpm install --frozen-lockfile
+RUN corepack enable && pnpm install --no-frozen-lockfile
 
 # Copy the rest and compile TS -> JS
 COPY tsconfig.json .
@@ -18,7 +18,7 @@ ENV NODE_ENV=production
 
 # Install only prod deps
 COPY package.json pnpm-lock.yaml* ./
-RUN corepack enable && pnpm install --prod --frozen-lockfile
+RUN corepack enable && pnpm install --prod --no-frozen-lockfile
 
 # Copy compiled JS + any assets
 COPY --from=build /app/dist ./dist
