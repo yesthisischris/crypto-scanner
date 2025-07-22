@@ -22,7 +22,7 @@ server.setRequestHandler(
   ListToolsRequestSchema,
   async (_: ListToolsRequest) => ({
     tools: [{
-      name: 'classify_asset',
+      name: 'classify',
       description: 'Return "trending" or "ranging" for the given symbol',
       inputSchema: {
         type: 'object',
@@ -39,7 +39,7 @@ server.setRequestHandler(
 server.setRequestHandler(
   CallToolRequestSchema,
   async (req: CallToolRequest) => {
-    if (req.params.name !== 'classify_asset') {
+    if (req.params.name !== 'classify') {
       return {
         content: [{ type: 'text', text: `Unknown tool ${req.params.name}` }],
         isError: true
@@ -58,6 +58,68 @@ server.setRequestHandler(
 
 /* ── 4. Boot & connect via the same transport Hyperion uses ----------- */
 async function main() {
+  // Check if stdin has data immediately available (pipe/redirect case)
+  const hasImmedateStdin = !process.stdin.isTTY;
+  
+  if (hasImmedateStdin) {
+    // Read stdin data for pipe/redirect scenarios
+    let stdinData = '';
+    
+    // Set a timeout to detect if we're getting immediate data
+    const timeout = new Promise(resolve => setTimeout(resolve, 100));
+    const dataPromise = new Promise<string>((resolve) => {
+      let data = '';
+      process.stdin.on('data', (chunk) => {
+        data += chunk.toString();
+      });
+      process.stdin.on('end', () => {
+        resolve(data);
+      });
+    });
+    
+    const result = await Promise.race([dataPromise, timeout]);
+    
+    if (typeof result === 'string' && result.trim()) {
+      stdinData = result.trim();
+      
+      try {
+        const message = JSON.parse(stdinData);
+        
+        // Handle simplified format
+        if (message.type === 'call_tool' && message.name && message.arguments) {
+          if (message.name === 'classify') {
+            const { symbol } = message.arguments;
+            const result = await classifyAsset({ symbol });
+            console.log(result.content[0].text);
+            return;
+          } else {
+            console.log(JSON.stringify({ error: `Unknown tool ${message.name}` }, null, 2));
+            return;
+          }
+        }
+        
+        if (message.type === 'list_tools') {
+          const tools = [{
+            name: 'classify',
+            description: 'Return "trending" or "ranging" for the given symbol',
+            inputSchema: {
+              type: 'object',
+              required: ['symbol'],
+              properties: {
+                symbol: { type: 'string', description: 'Crypto symbol, e.g. BTC' }
+              }
+            }
+          }];
+          console.log(JSON.stringify({ tools }, null, 2));
+          return;
+        }
+      } catch (e) {
+        // JSON parsing failed, fall through to normal MCP mode
+      }
+    }
+  }
+  
+  // Normal MCP mode for interactive use or JSON-RPC
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('Crypto-scanner MCP (Hyperion mode) running on stdio');
