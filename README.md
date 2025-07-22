@@ -29,9 +29,13 @@ This repository implements a minimal micro‑service that classifies a crypto as
 3. **Run the service**
 
    ```bash
-   pnpm dev
-   # In another terminal:
-   curl -X POST http://localhost:8787/scan -d '{"symbol":"BTC"}'
+   pnpm mcp
+   ```
+
+   In another terminal you can send MCP requests over stdio, e.g.:
+
+   ```bash
+   printf '{"type":"list_tools"}\n' | node dist/mcp-server.js | jq .
    ```
 
    You should receive a JSON response similar to:
@@ -63,6 +67,7 @@ The classification is as follows:
 The confidence score scales with ADX and is capped at 1.0.
 
 ## Docker Compose Instructions
+Run the containerized MCP server:
 ```
-    docker compose up --build        # http://localhost:8787
+docker compose up --build
 ```

@@ -1,34 +1,16 @@
-# ---- Stage 1: build ------------------------------------------------
-FROM node:20-alpine AS build
+# ---- Build stage -----------------------------------------------------
+FROM node:20-alpine AS builder
 WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile
+COPY tsconfig.json src ./
+RUN pnpm run build
 
-# Copy only the files that affect dependency resolution first
-COPY package.json pnpm-lock.yaml* ./
-RUN corepack enable && pnpm install --no-frozen-lockfile
-
-# Copy the rest and compile TS -> JS
-COPY tsconfig.json .
-COPY src ./src
-RUN pnpm run build            # runs `tsc` (add script below)
-
-# ---- Stage 2: runtime  (tiny image) --------------------------------
+# ---- Runtime stage ---------------------------------------------------
 FROM node:20-slim
 WORKDIR /app
 ENV NODE_ENV=production
-
-# Install curl for healthcheck
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-
-# Install only prod deps
-COPY package.json pnpm-lock.yaml* ./
-RUN corepack enable && pnpm install --prod --no-frozen-lockfile
-
-# Copy compiled JS + any assets
-COPY --from=build /app/dist ./dist
-
-# Ensure the container fails fast on unhandled rejections
-ENV NODE_OPTIONS=--unhandled-rejections=strict
-
-# Expose default port used by vercel-ai’s `serve` helper
-EXPOSE 8787
-CMD ["node", "dist/server.js"]
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --prod --frozen-lockfile
+COPY --from=builder /app/dist ./dist
+ENTRYPOINT ["node", "dist/mcp-server.js"]
