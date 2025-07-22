@@ -9,12 +9,13 @@ import {
   ListToolsRequestSchema, CallToolRequestSchema,
   type ListToolsRequest, type CallToolRequest
 } from '@modelcontextprotocol/sdk/types.js';
+import { setTimeout, clearTimeout } from 'timers';
 
 // -- Import YOUR existing tool code -----------------------------------
 import { toolHandler as classifyAsset } from './scanner/index.js';
 
 /* ── 1. Instantiate -------------------------------------------------- */
-const server = new Server({ name: 'crypto-scanner', version: '1.0.0' } as any);
+const server = new Server({ name: 'crypto-scanner', version: '1.0.0' });
 server.registerCapabilities({ tools: {} });
 
 /* ── 2. Register ListTools handler (one line per tool) --------------- */
@@ -58,32 +59,40 @@ server.setRequestHandler(
 
 /* ── 4. Boot & connect via the same transport Hyperion uses ----------- */
 async function main() {
-  // Check if stdin has data immediately available (pipe/redirect case)
-  const hasImmedateStdin = !process.stdin.isTTY;
-  
-  if (hasImmedateStdin) {
-    // Read stdin data for pipe/redirect scenarios
-    let stdinData = '';
+  // Simple approach: check if stdin has immediate data available
+  if (!process.stdin.isTTY) {
+    // We're being piped to, so check for simplified format first
+    let inputBuffer = '';
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     
-    // Set a timeout to detect if we're getting immediate data
-    const timeout = new Promise(resolve => setTimeout(resolve, 100));
-    const dataPromise = new Promise<string>((resolve) => {
-      let data = '';
-      process.stdin.on('data', (chunk) => {
-        data += chunk.toString();
-      });
-      process.stdin.on('end', () => {
-        resolve(data);
-      });
+    const dataPromise = new Promise<void>((resolve) => {
+      const onData = (chunk: Buffer) => {
+        inputBuffer += chunk.toString();
+      };
+      
+      const onEnd = () => {
+        process.stdin.removeListener('data', onData);
+        process.stdin.removeListener('end', onEnd);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        resolve();
+      };
+      
+      process.stdin.on('data', onData);
+      process.stdin.on('end', onEnd);
+      
+      // Small timeout to collect all data
+      timeoutId = setTimeout(() => {
+        onEnd();
+      }, 50);
     });
     
-    const result = await Promise.race([dataPromise, timeout]);
+    await dataPromise;
     
-    if (typeof result === 'string' && result.trim()) {
-      stdinData = result.trim();
-      
+    if (inputBuffer.trim()) {
       try {
-        const message = JSON.parse(stdinData);
+        const message = JSON.parse(inputBuffer.trim());
         
         // Handle simplified format
         if (message.type === 'call_tool' && message.name && message.arguments) {
@@ -113,7 +122,9 @@ async function main() {
           console.log(JSON.stringify({ tools }, null, 2));
           return;
         }
-      } catch (e) {
+        
+        // If it has jsonrpc field, it's a JSON-RPC message, fall through
+      } catch {
         // JSON parsing failed, fall through to normal MCP mode
       }
     }
