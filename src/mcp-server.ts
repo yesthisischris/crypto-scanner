@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /************************************************************************
- * MCP server (Hyperion-style) for crypto-scanner                       *
+ * MCP server for crypto-scanner                       *
  ***********************************************************************/
 import 'dotenv/config';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -57,9 +57,9 @@ server.setRequestHandler(
   }
 );
 
-/* ── 4. Boot & connect via the same transport Hyperion uses ----------- */
+/* ── 4. Boot & connect ----------- */
 async function main() {
-  // Simple approach: check if stdin has immediate data available
+  // Check if stdin has immediate data available
   if (!process.stdin.isTTY) {
     // We're being piped to, so check for simplified format first
     let inputBuffer = '';
@@ -133,6 +133,6 @@ async function main() {
   // Normal MCP mode for interactive use or JSON-RPC
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('Crypto-scanner MCP (Hyperion mode) running on stdio');
+  console.error('Crypto-scanner MCP running on stdio');
 }
 main().catch(e => { console.error(e); process.exit(1); });
