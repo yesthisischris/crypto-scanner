@@ -9,14 +9,14 @@ import {
   type ListToolsRequest, type CallToolRequest
 } from '@modelcontextprotocol/sdk/types.js';
 
-// -- Import YOUR existing tool code -----------------------------------
+// -- Import tool code -----------------------------------
 import { toolHandler as classifyAsset } from './scanner/index.js';
 
 /* ── 1. Instantiate -------------------------------------------------- */
 const server = new Server({ name: 'crypto-scanner', version: '1.0.0' });
 server.registerCapabilities({ tools: {} });
 
-/* ── 2. Register ListTools handler (one line per tool) --------------- */
+/* ── 2. Register ListTools handler --------------- */
 server.setRequestHandler(
   ListToolsRequestSchema,
   async (_: ListToolsRequest) => ({
@@ -48,7 +48,6 @@ server.setRequestHandler(
     const { symbol } = (req.params.arguments ?? {}) as { symbol: string };
     const result = await classifyAsset({ symbol });
 
-    // The toolHandler already returns the proper MCP format with content array
     return result;
   }
 );
@@ -60,9 +59,7 @@ async function main() {
   console.error('Crypto-scanner MCP running on stdio');
   
   // Keep the process alive for Docker containers
-  // In Docker, stdin may close immediately so we need to keep the process running
   const keepAlive = () => {
-    // This keeps the event loop alive
     setTimeout(keepAlive, 1000 * 60 * 60); // Check every hour
   };
   keepAlive();
