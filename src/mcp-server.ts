@@ -8,7 +8,6 @@ import {
   ListToolsRequestSchema, CallToolRequestSchema,
   type ListToolsRequest, type CallToolRequest
 } from '@modelcontextprotocol/sdk/types.js';
-import { setTimeout, clearTimeout } from 'timers';
 
 // -- Import YOUR existing tool code -----------------------------------
 import { toolHandler as classifyAsset } from './scanner/index.js';
@@ -49,114 +48,23 @@ server.setRequestHandler(
     const { symbol } = (req.params.arguments ?? {}) as { symbol: string };
     const result = await classifyAsset({ symbol });
 
-    return {
-      content: [{ type: 'json', json: result }],
-      isError: false
-    };
+    // The toolHandler already returns the proper MCP format with content array
+    return result;
   }
 );
 
 /* ── 4. Boot & connect ----------- */
 async function main() {
-  // Check if stdin has immediate data available
-  if (!process.stdin.isTTY) {
-    // We're being piped to, so check for simplified format first
-    let inputBuffer = '';
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    let stdinClosed = false;
-    
-    const dataPromise = new Promise<void>((resolve) => {
-      const onData = (chunk: Buffer) => {
-        inputBuffer += chunk.toString();
-      };
-      
-      const onEnd = () => {
-        stdinClosed = true;
-        process.stdin.removeListener('data', onData);
-        process.stdin.removeListener('end', onEnd);
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
-        resolve();
-      };
-      
-      process.stdin.on('data', onData);
-      process.stdin.on('end', onEnd);
-      
-      // Small timeout to collect all data
-      timeoutId = setTimeout(() => {
-        onEnd();
-      }, 50);
-    });
-    
-    await dataPromise;
-    
-    if (inputBuffer.trim()) {
-      try {
-        const message = JSON.parse(inputBuffer.trim());
-        
-        // Handle simplified format
-        if (message.type === 'call_tool' && message.name && message.arguments) {
-          if (message.name === 'classify') {
-            const { symbol } = message.arguments;
-            const result = await classifyAsset({ symbol });
-            console.log(result.content[0].text);
-            return;
-          } else {
-            console.log(JSON.stringify({ error: `Unknown tool ${message.name}` }, null, 2));
-            return;
-          }
-        }
-        
-        if (message.type === 'list_tools') {
-          const tools = [{
-            name: 'classify',
-            description: 'Return "trending" or "ranging" for the given symbol',
-            inputSchema: {
-              type: 'object',
-              required: ['symbol'],
-              properties: {
-                symbol: { type: 'string', description: 'Crypto symbol, e.g. BTC' }
-              }
-            }
-          }];
-          console.log(JSON.stringify({ tools }, null, 2));
-          return;
-        }
-        
-        // If it has jsonrpc field, it's a JSON-RPC message, fall through
-      } catch {
-        // JSON parsing failed, fall through to normal MCP mode
-      }
-    }
-    
-    // If stdin was closed immediately (like in Docker), keep the process running
-    if (stdinClosed && !inputBuffer.trim()) {
-      console.error('Crypto-scanner MCP running in Docker mode - staying alive');
-      // Keep the process alive indefinitely in Docker environment
-      const keepAlive = setInterval(() => {
-        // Do nothing, just keep the process alive
-      }, 30000); // Check every 30 seconds
-      
-      // Handle shutdown signals gracefully
-      process.on('SIGTERM', () => {
-        clearInterval(keepAlive);
-        process.exit(0);
-      });
-      
-      process.on('SIGINT', () => {
-        clearInterval(keepAlive);
-        process.exit(0);
-      });
-      
-      // Return a promise that never resolves to keep main() running
-      return new Promise(() => {});
-    }
-  }
-  
-  // Normal MCP mode for interactive use or JSON-RPC
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('Crypto-scanner MCP running on stdio');
+  
+  // Keep the process alive for Docker containers
+  // In Docker, stdin may close immediately so we need to keep the process running
+  const keepAlive = () => {
+    // This keeps the event loop alive
+    setTimeout(keepAlive, 1000 * 60 * 60); // Check every hour
+  };
+  keepAlive();
 }
 main().catch(e => { console.error(e); process.exit(1); });
