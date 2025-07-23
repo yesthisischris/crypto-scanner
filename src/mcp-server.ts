@@ -2,7 +2,6 @@
 /************************************************************************
  * MCP server for crypto-scanner                       *
  ***********************************************************************/
-import 'dotenv/config';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -64,6 +63,7 @@ async function main() {
     // We're being piped to, so check for simplified format first
     let inputBuffer = '';
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let stdinClosed = false;
     
     const dataPromise = new Promise<void>((resolve) => {
       const onData = (chunk: Buffer) => {
@@ -71,6 +71,7 @@ async function main() {
       };
       
       const onEnd = () => {
+        stdinClosed = true;
         process.stdin.removeListener('data', onData);
         process.stdin.removeListener('end', onEnd);
         if (timeoutId) {
@@ -127,6 +128,29 @@ async function main() {
       } catch {
         // JSON parsing failed, fall through to normal MCP mode
       }
+    }
+    
+    // If stdin was closed immediately (like in Docker), keep the process running
+    if (stdinClosed && !inputBuffer.trim()) {
+      console.error('Crypto-scanner MCP running in Docker mode - staying alive');
+      // Keep the process alive indefinitely in Docker environment
+      const keepAlive = setInterval(() => {
+        // Do nothing, just keep the process alive
+      }, 30000); // Check every 30 seconds
+      
+      // Handle shutdown signals gracefully
+      process.on('SIGTERM', () => {
+        clearInterval(keepAlive);
+        process.exit(0);
+      });
+      
+      process.on('SIGINT', () => {
+        clearInterval(keepAlive);
+        process.exit(0);
+      });
+      
+      // Return a promise that never resolves to keep main() running
+      return new Promise(() => {});
     }
   }
   
