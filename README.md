@@ -1,6 +1,6 @@
-# Crypto Scanner
+# MCP Crypto Scanner
 
-This repository implements a minimal micro‑service that classifies a crypto asset as **trending** or **ranging** using simple technical indicators. The service is designed to be compatible with the Model‑Context‑Protocol (MCP) so it can be orchestrated by other agentic systems.
+This repository implements a micro‑service that classifies a crypto asset as **trending** or **ranging** using technical indicators. The service is designed to be compatible with the Model‑Context‑Protocol (MCP) so it can be orchestrated by other agentic systems.
 
 ## Features
 
